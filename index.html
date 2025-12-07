@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>Otto Web BLE Controller</title>
+<style>
+body { font-family: Arial, sans-serif; text-align:center; background:#f9f9f9; }
+button{
+    width:140px; height:60px; margin:10px; font-size:16px;
+    border:none; border-radius:10px; background:#4CAF50; color:white;
+}
+button.red{ background:#d9534f; }
+button.blue{ background:#0275d8;}
+.container{ margin-top:30px; }
+</style>
+</head>
+<body>
+
+<h2>OTTO BLE 遙控器</h2>
+<button id="connectBle">連線 / Connect</button>
+<button id="disconnectBle" disabled>中斷連線 / Disconnect</button>
+<p id="status">尚未連線</p>
+
+<div class="container">
+    <button onclick="sendMove('forward')">⬆ 前進 / Forward (forward)</button><br>
+    <button onclick="sendMove('left')">⬅ 左轉 / Left (left)</button>
+    <button onclick="sendMove('stop')" class="red">⏹ 停止 / Stop (stop)</button>
+    <button onclick="sendMove('right')">➡ 右轉 / Right (right)</button><br>
+    <button onclick="sendMove('backward')">⬇ 後退 / Backward (backward)</button>
+</div>
+
+<h3>表情與動作 / Emotions & Gestures</h3>
+<!-- 第一列 -->
+<button onclick="sendGesture('happy')">開心 / Happy (happy)</button>
+<button onclick="sendGesture('superhappy')">超開心 / Super Happy (superhappy)</button>
+<button onclick="sendGesture('sad')">難過 / Sad (sad)</button>
+<button onclick="sendGesture('sleeping')">睡覺 / Sleeping (sleeping)</button><br>
+<!-- 第二列 -->
+<button onclick="sendGesture('confused')">困惑 / Confused (confused)</button>
+<button onclick="sendGesture('fretful')">煩躁 / Fretful (fretful)</button>
+<button onclick="sendGesture('love')">愛心 / Love (love)</button>
+<button onclick="sendGesture('angry')">生氣 / Angry (angry)</button><br>
+<!-- 第三列 -->
+<button onclick="sendGesture('magic')">魔法 / Magic (magic)</button>
+<button onclick="sendGesture('wave')">揮手 / Wave (wave)</button>
+<button onclick="sendGesture('victory')">勝利 / Victory (victory)</button>
+<button onclick="sendGesture('fail')">失敗 / Fail (fail)</button><br>
+<!-- 第四列 -->
+<button onclick="sendGesture('fart')">放屁 / Fart (fart)</button>
+<br/>
+<img src="2_01.png">
+<script>
+let device, server, uartService, tx;
+
+// 速度索引 0~5，先固定 2，如果要加 slider 再改這裡
+let speedIndex = 2;
+
+const connectBtn    = document.getElementById("connectBle");
+const disconnectBtn = document.getElementById("disconnectBle");
+const statusEl      = document.getElementById("status");
+
+connectBtn.onclick = async () => {
+    try{
+        device = await navigator.bluetooth.requestDevice({
+            filters:[
+                { namePrefix: "Otto" }
+                
+            ]
+        });
+
+        device.addEventListener("gattserverdisconnected", onDisconnected);
+
+        server = await device.gatt.connect();
+        uartService = await server.getPrimaryService("0000ffe0-0000-1000-8000-00805f9b34fb");
+        tx = await uartService.getCharacteristic("0000ffe1-0000-1000-8000-00805f9b34fb");
+
+        statusEl.innerHTML = "已連線: " + device.name;
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+    }catch(e){
+        alert("連線失敗: " + e);
+    }
+};
+
+disconnectBtn.onclick = () => {
+    disconnect();
+};
+
+function disconnect(){
+    if (device && device.gatt && device.gatt.connected){
+        device.gatt.disconnect();
+    } else {
+        onDisconnected();
+    }
+}
+
+function onDisconnected(){
+    tx = null;
+    uartService = null;
+    server = null;
+    statusEl.innerHTML = "尚未連線";
+    connectBtn.disabled = false;
+    disconnectBtn.disabled = true;
+    console.log("藍牙已斷線");
+}
+
+function sendRaw(str){
+    if(!tx) { 
+        alert("請先連線 BLE"); 
+        return; 
+    }
+    const data = new TextEncoder().encode(str);
+    tx.writeValue(data);
+    console.log(">>> Sent:", JSON.stringify(str));
+}
+
+// 移動 / 模式：指令 + 速度數字 + 換行
+function sendMove(cmd){
+    const line = cmd + String(speedIndex) + "\n";
+    sendRaw(line);
+}
+
+// 表情：指令 + "0" + 換行，讓 Arduino 那邊 n 會被設成 0（合法索引）
+function sendGesture(cmd){
+    const line = cmd + "0\n";
+    sendRaw(line);
+}
+</script>
+
+</body>
+</html>
